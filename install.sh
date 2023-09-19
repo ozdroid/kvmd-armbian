@@ -116,7 +116,7 @@ packaging passlib pillow ply psutil pycparser pyelftools pyghmi pygments pyparsi
 setproctitle setuptools six spidev systemd tabulate urllib3 wrapt xlib yaml yarl pyotp qrcode serial " )
   do
     echo "apt-get install python3-$i -y"
-    apt-get install python3-$i -y > /dev/null
+    apt-get install python3-$i -y  ##> /dev/null
   done
 } # end install python-packages
 
@@ -759,7 +759,7 @@ else
   systemd-sysusers /usr/lib/sysusers.d/kvmd-webterm.conf
 
   ### additional python pip dependencies for kvmd 3.238 and higher
-  pip3 install async-lru 2> /dev/null
+  pip3 install async-lru --break-system-packages 2> /dev/null
 
   fix-nginx-symlinks
   fix-python-symlinks
