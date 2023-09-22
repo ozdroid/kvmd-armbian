@@ -6,15 +6,18 @@
 # created by @srepac   08/09/2021   srepac@kvmnerds.com
 # Scripted Installer of Pi-KVM on Armbian 32-bit and 64-bit (as long as it's running python 3.10 or higher)
 #
+
 # *** MSD is disabled by default ***
-#
-# Mass Storage Device requires the use of a USB thumbdrive or SSD and will need to be added in /etc/fstab
+# 想要开启虚拟磁盘（MSD ）需要把硬盘添加到/etc/fstab，MSD默认关闭
+################################################################
 : '
 # SAMPLE /etc/fstab entry for USB drive with only one partition formatted as ext4 for the entire drive:
 
 /dev/sda1  /var/lib/kvmd/msd   ext4  nodev,nosuid,noexec,ro,errors=remount-ro,data=journal,X-kvmd.otgmsd-root=/var/lib/kvmd/msd,X-kvmd.otgmsd-user=kvmd  0  0
 
 '
+################################################################
+
 # NOTE:  This was tested on a new install of raspbian desktop and lite versions, but should also work on an existing install.
 #
 # Last change 20230630 0945 PDT
@@ -25,17 +28,27 @@ KVMDCACHE="/var/cache/kvmd"
 PKGINFO="${KVMDCACHE}/packages.txt"
 APP_PATH=$(readlink -f $(dirname $0))
 
+# -h 帮助目录只有，-f 强制重装
+################################################################
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "usage:  $0 [-f]   where -f will force re-install new pikvm platform"
   exit 1
 fi
+################################################################
 
+
+# -h 帮助目录只有，-f 强制重装
+################################################################
 WHOAMI=$( whoami )
 if [ "$WHOAMI" != "root" ]; then
   echo "$WHOAMI, please run script as root."
   exit 1
 fi
+################################################################
 
+
+#检查Python 版本
+################################################################
 PYTHONVER=$( python3 -V | cut -d' ' -f2 | cut -d'.' -f1,2 )
 case $PYTHONVER in
   3.10|3.11)
@@ -46,6 +59,7 @@ case $PYTHONVER in
     exit 1
     ;;
 esac
+################################################################
 
 ### added on 01/31/23 in case armbian is installed on rpi boards
 if [[ ! -e /boot/config.txt && -e /boot/firmware/config.txt ]]; then
@@ -59,6 +73,8 @@ press-enter() {
   read -p "Press ENTER to continue or CTRL+C to break out of script."
 } # end press-enter
 
+##计算SSL钥匙，并复制到相关目录
+################################################################
 gen-ssl-certs() {
   cd /etc/kvmd/nginx/ssl
   openssl ecparam -out server.key -name prime256v1 -genkey
@@ -67,7 +83,10 @@ gen-ssl-certs() {
   cp server* /etc/kvmd/vnc/ssl/
   cd ${APP_PATH}
 } # end gen-ssl-certs
+################################################################
 
+## 创建KVMD的主要配置文件 override.yaml
+################################################################
 create-override() {
   if [ $( grep ^kvmd: /etc/kvmd/override.yaml | wc -l ) -eq 0 ]; then
 
@@ -108,7 +127,11 @@ CSIOVERRIDE
 
   fi
 } # end create-override
+################################################################
 
+
+### 安装 Python 相关 Packages
+################################################################
 install-python-packages() {
   for i in $( echo "aiofiles aiohttp appdirs asn1crypto async-timeout bottle cffi chardet click
 colorama cryptography dateutil dbus dev hidapi idna libgpiod marshmallow more-itertools multidict netifaces
@@ -119,7 +142,10 @@ setproctitle setuptools six spidev systemd tabulate urllib3 wrapt xlib yaml yarl
     apt-get install python3-$i -y  ##> /dev/null
   done
 } # end install python-packages
+################################################################
 
+## 创建OTG设备
+################################################################
 otg-devices() {
   modprobe libcomposite
   if [ ! -e /sys/kernel/config/usb_gadget/kvmd ]; then
@@ -129,7 +155,11 @@ otg-devices() {
   fi
   cd ${APP_PATH}
 } # end otg-device creation
+################################################################
 
+
+## CSI 驱动 和相关
+################################################################
 install-tc358743() {
   ### CSI Support for Raspbian ###
   curl https://www.linux-projects.org/listing/uv4l_repo/lpkey.asc | apt-key add -
@@ -139,7 +169,10 @@ install-tc358743() {
   echo "apt-get install uv4l-tc358743-extras -y"
   apt-get install uv4l-tc358743-extras -y > /dev/null
 } # install package for tc358743
+################################################################
 
+## BOOT 文件
+################################################################
 boot-files() {
   if [[ -e /boot/config.txt && $( grep srepac /boot/config.txt | wc -l ) -eq 0 ]]; then
 
@@ -228,18 +261,23 @@ CSIFIRMWARE
   printf "\n/etc/modules\n\n"
   cat /etc/modules
 } # end of necessary boot files
+################################################################
 
+
+## 下载相关的包
+################################################################
 get-packages() {
   printf "\n\n-> Getting Pi-KVM packages from ${PIKVMREPO}\n\n"
   mkdir -p ${KVMDCACHE}/ARCHIVE
   if [ $( ls ${KVMDCACHE}/kvmd* > /dev/null 2>&1 | wc -l ) -gt 0 ]; then
-    mv ${KVMDCACHE}/kvmd* ${KVMDCACHE}/ARCHIVE   ### move previous kvmd* packages into ARCHIVE
+    mv ${KVMDCACHE}/kvmd* ${KVMDCACHE}/ARCHIVE   ### 移动上一个版本到 ARCHIVE
   fi
 
   echo "wget ${PIKVMREPO} -O ${PKGINFO}"
   wget ${PIKVMREPO} -O ${PKGINFO} 2> /dev/null
   echo
 
+  # 从pikvm.org 下载 packages
   # Download each of the pertinent packages for Rpi4, webterm, and the main service
   for pkg in `egrep 'janus|kvmd' ${PKGINFO} | grep -v sig | cut -d'>' -f1 | cut -d'"' -f2 | egrep -v 'fan|oled' | egrep 'janus|pi4|webterm|kvmd-[0-9]'`
   do
@@ -253,7 +291,10 @@ get-packages() {
   ls -l ${KVMDCACHE}
   echo
 } # end get-packages function
+################################################################
 
+## 获得平台信息
+################################################################
 get-platform() {
   tryagain=1
   while [ $tryagain -eq 1 ]; do
@@ -279,7 +320,10 @@ get-platform() {
     echo
   done
 } # end get-platform
+################################################################
 
+## 安装KVMD 包
+################################################################
 install-kvmd-pkgs() {
   cd /
 
@@ -318,19 +362,30 @@ install-kvmd-pkgs() {
   cd ${APP_PATH}
 } # end install-kvmd-pkgs
 
+
+##修正 UDEV 文件
+################################################################
 fix-udevrules() {
   # for hdmiusb, replace %b with 1-1.4:1.0 in /etc/udev/rules.d/99-kvmd.rules
   sed -i -e 's+\%b+1-1.4:1.0+g' /etc/udev/rules.d/99-kvmd.rules
   echo
   cat /etc/udev/rules.d/99-kvmd.rules
 } # end fix-udevrules
+################################################################
 
+
+##开启KVMD 服务 但是不启动
+################################################################
 enable-kvmd-svcs() {
   # enable KVMD services but don't start them
   echo "-> Enabling kvmd-nginx kvmd-webterm kvmd-otg and kvmd services, but do not start them."
   systemctl enable kvmd-nginx kvmd-webterm kvmd-otg kvmd kvmd-fix
 } # end enable-kvmd-svcs
+################################################################
 
+
+##编译ustreamer
+################################################################
 build-ustreamer() {
   printf "\n\n-> Building ustreamer\n\n"
   # Install packages needed for building ustreamer source
@@ -349,7 +404,12 @@ build-ustreamer() {
   # kvmd service is looking for /usr/bin/ustreamer
   ln -sf /usr/local/bin/ustreamer* /usr/bin/
 } # end build-ustreamer
+################################################################
 
+
+
+##安装依赖依赖Packages
+################################################################
 install-dependencies() {
   echo
   echo "-> Installing dependencies for pikvm"
@@ -358,8 +418,11 @@ install-dependencies() {
   echo "apt install -y nginx python3 net-tools bc expect v4l-utils iptables vim dos2unix screen tmate nfs-common gpiod ffmpeg dialog iptables dnsmasq git python3-pip tesseract-ocr tesseract-ocr-eng libasound2-dev libsndfile-dev libspeexdsp-dev"
   apt install -y nginx python3 net-tools bc expect v4l-utils iptables vim dos2unix screen tmate nfs-common gpiod ffmpeg dialog iptables dnsmasq git python3-pip tesseract-ocr tesseract-ocr-eng libasound2-dev libsndfile-dev libspeexdsp-dev ##> /dev/null
 
+
+   ## 安装 python 包
   install-python-packages
 
+   ## 安装 python 包
   echo "-> Install python3 modules dbus_next and zstandard"
   if [[ "$PYTHONVER" == "3.11" ]]; then
     apt install -y python3-dbus-next python3-zstandard
@@ -367,9 +430,11 @@ install-dependencies() {
     pip3 install dbus_next zstandard
   fi
 
+  # 软连接
   echo "-> Make tesseract data link"
   ln -s /usr/share/tesseract-ocr/*/tessdata /usr/share/tessdata
 
+  ## 安装 TTYD
   echo "-> Install TTYD"
   apt install -y ttyd
   if [ ! -e /usr/bin/ttyd ]; then
@@ -390,6 +455,7 @@ install-dependencies() {
     chmod +x /usr/bin/ttyd
   fi
 
+  ##安装 WiringPi
   printf "\n\n-> Building wiringpi from source\n\n"
   cd /tmp; rm -rf WiringPi
   git clone https://github.com/WiringPi/WiringPi.git
@@ -397,6 +463,7 @@ install-dependencies() {
   ./build
   gpio -v
 
+  ##安装ustreamer
   echo "-> Install ustreamer"
   if [ ! -e /usr/bin/ustreamer ]; then
     cd /tmp
@@ -406,7 +473,10 @@ install-dependencies() {
     cd ${APP_PATH}
   fi
 } # end install-dependencies
+################################################################
 
+## 快速获得python packages 位置
+################################################################
 python-pkg-dir() {
   # debian system python3 no alias
   # create quick python script to show where python packages need to go
@@ -422,7 +492,10 @@ MYSCRIPT
   ### hardcode path for armbian/raspbian
   PYTHONDIR="/usr/lib/python3/dist-packages"
 } # end python-pkg-dir
+################################################################
 
+##配置Nginx，关闭默认的Nginx，创建新的配置
+################################################################
 fix-nginx-symlinks() {
   # disable default nginx service since we will use kvmd-nginx instead
   echo
@@ -445,16 +518,17 @@ fix-nginx-symlinks() {
     ln -sf /usr/lib/python3.1*/site-packages/kvmd* ${PYTHONDIR}
   fi
 } # end fix-nginx-symlinks
+################################################################
 
 fix-python-symlinks(){
   python-pkg-dir
-
   if [ ! -e $PYTHONDIR/kvmd ]; then
     # Debian python版本比 pikvm官方的低一些
     ln -sf /usr/lib/python3.1*/site-packages/kvmd* ${PYTHONDIR}
   fi
 }
 
+################################################################
 apply-custom-patch(){
   read -p "Do you want apply old kernel msd patch? [y/n]" answer
   case $answer in
@@ -468,7 +542,10 @@ apply-custom-patch(){
       echo "Try again.";;
   esac
 }
+################################################################
 
+# 打补丁来移除一些对armbian和电视盒子不太支持的特性
+################################################################
 fix-kvmd-for-tvbox-armbian(){
   # 打补丁来移除一些对armbian和电视盒子不太支持的特性
   cd /usr/lib/python3.10/site-packages/
@@ -487,7 +564,10 @@ fix-kvmd-for-tvbox-armbian(){
      echo "Try again.";;
   esac
 }
+################################################################
 
+##修复webterm
+################################################################
 fix-webterm() {
   echo
   echo "-> Creating kvmd-webterm homedir"
@@ -495,7 +575,10 @@ fix-webterm() {
   chown kvmd-webterm /home/kvmd-webterm
   ls -ld /home/kvmd-webterm
 } # end fix-webterm
+################################################################
 
+## 修复kvmd
+################################################################
 create-kvmdfix() {
   # Create kvmd-fix service and script
   cat <<ENDSERVICE > /lib/systemd/system/kvmd-fix.service
@@ -557,7 +640,10 @@ SCRIPTEND
 
   chmod +x /usr/bin/kvmd-fix
 } # end create-kvmdfix
+################################################################
 
+
+################################################################
 set-ownership() {
   # set proper ownership of password files and kvmd-webterm homedir
   cd /etc/kvmd
@@ -572,7 +658,11 @@ set-ownership() {
   # add kvmd user to dialout group (required for xh_hk4401 kvm switch support)
   usermod -a -G dialout kvmd
 } # end set-ownership
+################################################################
 
+
+##检查kvmd是否工作
+################################################################
 check-kvmd-works() {
   echo "-> Checking kvmd -m works before continuing"
   invalid=1
@@ -591,7 +681,10 @@ check-kvmd-works() {
     esac
   done
 } # end check-kvmd-works
+################################################################
 
+##启动kvmd
+################################################################
 start-kvmd-svcs() {
   #### start the main KVM services in order ####
   # 1. nginx is the webserver
@@ -601,6 +694,8 @@ start-kvmd-svcs() {
   systemctl restart kvmd-nginx kvmd-otg kvmd-webterm kvmd kvmd-fix
 } # end start-kvmd-svcs
 
+##motd
+################################################################
 fix-motd() {
   if [ -e /etc/motd ]; then rm /etc/motd; fi
   cp armbian/armbian-motd /usr/bin/
@@ -608,8 +703,10 @@ fix-motd() {
   systemctl daemon-reload
   # systemctl restart kvmd-webterm
 } # end fix-motd
+################################################################
 
 # 安装armbian的包
+################################################################
 armbian-packages() {
   mkdir -p /opt/vc/bin/
   #cd /opt/vc/bin
@@ -623,7 +720,10 @@ armbian-packages() {
 
   cd ${APP_PATH}
 } # end armbian-packages
+################################################################
 
+# 修复MSD
+################################################################
 fix-nfs-msd() {
   NAME="aiofiles.tar"
 
@@ -637,7 +737,10 @@ fix-nfs-msd() {
   ln -s $LOCATION/aiofiles .
   ls -ld aiofiles*
 }
+################################################################
 
+##修复NGINX
+################################################################
 fix-nginx() {
   #set -x
   KERNEL=$( uname -r | awk -F\- '{print $1}' )
@@ -685,7 +788,10 @@ ORIG_CONF
   cat $HTTPSCONF
   set +x
 } # end fix-nginx
+################################################################
 
+##OCR修复
+################################################################
 ocr-fix() {  # create function
   echo
   echo "-> Apply OCR fix..."
@@ -713,7 +819,7 @@ ocr-fix() {  # create function
 
   echo
 } # end ocr-fix
-
+################################################################
 
 ### MAIN STARTS HERE ###
 # Install is done in two parts
