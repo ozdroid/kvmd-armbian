@@ -833,6 +833,7 @@ ln -sf python3 /usr/bin/python
 PYTHON_VERSION=$( python3 -V | awk '{print $2}' | cut -d'.' -f1,2 )
 if [[ $( grep kvmd /etc/passwd | wc -l ) -eq 0 || "$1" == "-f" ]]; then
   printf "\nRunning part 1 of PiKVM installer script for Armbian by @srepac\n"
+  dpkg --configure -a
   get-packages
   get-platform
   boot-files
